@@ -45,18 +45,18 @@ func (c *Cache) GetObject(key string, data interface{}) error {
 		if v.IsExpired() {
 			return errors.New("val is expired")
 		}
-		switch reflect.TypeOf(data).Kind() {
-		case reflect.Ptr:
-			switch reflect.ValueOf(data).Elem().Kind() {
-			case reflect.Struct:
-				reflect.ValueOf(data).Elem().Set(reflect.ValueOf(v.v))
-				return nil
-			default:
-				return errors.New("dest must be a struct pointer")
-			}
-		default:
-			return errors.New("dest must be a struct pointer")
+		destKind := reflect.TypeOf(data).Kind()
+		if destKind != reflect.Ptr {
+			return errors.New("dest must be a pointer")
 		}
+		vKind := reflect.TypeOf(v.v).Kind()
+		if vKind == reflect.Ptr {
+			vKind = reflect.TypeOf(v.v).Elem().Kind()
+		}
+		if reflect.TypeOf(data).Elem().Kind() != vKind {
+			return errors.New("val type error")
+		}
+		reflect.ValueOf(data).Elem().Set(reflect.ValueOf(v.v))
 		return nil
 	}
 	return nil
