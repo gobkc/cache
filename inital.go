@@ -13,9 +13,10 @@ var (
 func NewCache() ICache {
 	once.Do(func() {
 		cache = &Cache{
-			expired:  5 * time.Second,
-			interval: 1 * time.Second,
-			data:     make(map[string]*Item),
+			expired:     5 * time.Second,
+			interval:    1 * time.Second,
+			concurrency: 1000,
+			data:        make(map[string]*Item),
 		}
 		go cache.GC()
 	})

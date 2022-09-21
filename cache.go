@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"encoding/json"
 	"errors"
 	"log"
 	"reflect"
@@ -10,10 +9,11 @@ import (
 )
 
 type Cache struct {
-	lock     sync.RWMutex
-	expired  time.Duration
-	interval time.Duration
-	data     map[string]*Item
+	lock        sync.RWMutex
+	expired     time.Duration
+	interval    time.Duration
+	concurrency int64
+	data        map[string]*Item
 }
 
 func (c *Cache) Get(key string) (interface{}, error) {
@@ -35,7 +35,7 @@ func (c *Cache) GetALL() (map[string]interface{}, error) {
 	for key, item := range c.data {
 		data[key] = item
 	}
-	return nil, nil
+	return data, nil
 }
 
 func (c *Cache) GetObject(key string, data interface{}) error {
@@ -91,24 +91,27 @@ func (c *Cache) DeleteExpired() error {
 	defer c.lock.Unlock()
 	for key, item := range c.data {
 		if item.IsExpired() {
-			if err := c.Delete(key); err != nil {
-				return err
+			if _, findOk := c.data[key]; !findOk {
+				return errors.New("key not exist")
 			}
+			delete(c.data, key)
 		}
 	}
 	return nil
 }
 
 func (c *Cache) GC() {
+	limit := make(chan struct{}, c.concurrency)
 	for {
-		data, _ := c.GetALL()
-		b, _ := json.MarshalIndent(data, "", "\t")
-		log.Println("gc data:", string(b))
-		go func() {
-			if err := c.DeleteExpired(); err != nil {
-				log.Panicln(err.Error())
-			}
-		}()
+		limit <- struct{}{}
+		go c.toGC(&limit)
 		time.Sleep(c.interval)
 	}
+}
+
+func (c *Cache) toGC(limit *chan struct{}) {
+	if err := c.DeleteExpired(); err != nil {
+		log.Println(err.Error())
+	}
+	<-*limit
 }
